@@ -72,11 +72,15 @@ function loadImg() {
 
   function onLoad(response) {
     imageLoader.setAttribute('style', 'display: none');
-    response.text().then(text => console.log(text));
-    if(response.ok) {
-      img.src = fileUrl;
-      setMenuState('default');
-    }
+    response.text().then(text => {
+      console.log(text);
+
+      if(response.ok) {
+        const data = JSON.parse(text);
+        img.src = data.url;
+        setMenuState('default');
+      }
+    });
   }
 
 
