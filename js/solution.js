@@ -1,40 +1,41 @@
 'use strict';
 
-const app = document.querySelector('.app'),
+const currentUrl = window.location.href,
+      app = document.querySelector('.app'),
       menu = app.querySelector('.menu'),
       uploadButton = menu.querySelector('.new'),
       error = app.querySelector('.error'),
       errorMessage = error.querySelector('.error__message'),
       img = app.querySelector('img'),
-      imageLoader = app.querySelector('.image-loader');
+      imageLoader = app.querySelector('.image-loader'),
+      share = menu.querySelector('.share'),
+      menuUrl = menu.querySelector('.menu__url'),
+      btnCopy = menu.querySelector('.menu_copy'),
+      comments = menu.querySelector('.comments'),
+      burger = menu.querySelector('.burger');
 
 // инициализация
-
-setMenuState('initial');
+menu.setAttribute('data-state', 'initial');
 img.src = '';
 
-// загрузка изображений
-
-function setMenuState(state) {
-  switch(state){
-    case 'initial':
-      menu.setAttribute('data-state', 'initial');
-      break;
-    case 'default':
-      menu.setAttribute('data-state', 'default');
-      break;
-    case 'selected':
-      menu.setAttribute('data-state', 'selected');
-      break;
-  }
+if(sessionStorage.img) {
+  img.src = sessionStorage.img
+  menu.setAttribute('data-state', 'selected');
+  share.setAttribute('data-state', 'selected');
+  menuUrl.value = currentUrl + '?id=' + sessionStorage.id;
 }
 
+loadShare(); // поздновато срабатывает
 
+// назнвчение обработчиков
+menu.addEventListener('click', selectMode);
 uploadButton.addEventListener('click', upload);
 app.addEventListener('drop', upload);
 app.addEventListener('dragover', event => event.preventDefault());
+btnCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.value));
+burger.addEventListener('click', cancelSelect);
 
-
+// загрузка изображений
 function upload() {
   event.preventDefault();
   const imgSrcRegExp = /^file/;
@@ -42,7 +43,7 @@ function upload() {
     createInput();
     return;
   }
-  console.log(imgSrcRegExp.test( img.src ));
+
   if(imgSrcRegExp.test( img.src )) {
     const file = event.dataTransfer.files[0];
     loadImg(file);
@@ -94,12 +95,17 @@ function loadImg(myFile = '') {
 function onLoad(response) {
   imageLoader.setAttribute('style', 'display: none');
   response.text().then(text => {
-    console.log(text);
+    // console.log(text);
 
     if(response.ok) {
       const data = JSON.parse(text);
       img.src = data.url;
-      setMenuState('default');
+      sessionStorage.img = data.url;
+      sessionStorage.id = data.id;
+      menu.setAttribute('data-state', 'selected');
+      share.setAttribute('data-state', '');
+      comments.setAttribute('data-state', 'selected');
+      menuUrl.value = currentUrl + '?id=' + data.id;
     } else {
       error.setAttribute('style', 'display: inline-block');
       errorMessage.innerHTML = text;
@@ -116,3 +122,28 @@ function onLoad(response) {
 }
 
 
+function loadShare() {
+  const id = currentUrl.match(/(?<=id=).*$/) ? currentUrl.match(/(?<=id=).*$/)[0] : '';
+
+  if(id) {
+    fetch(`https://neto-api.herokuapp.com/pic/${id}`)
+    .then(onLoad)
+    .catch(err => {
+      console.log(err);
+    });
+  }
+}
+
+function cancelSelect() {
+  menu.setAttribute('data-state', 'default');
+  Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
+}
+
+// доработать
+function selectMode() {
+  if(event.target.classList.contains('mode')) {
+    menu.setAttribute('data-state', 'selected');
+    Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
+    event.target.setAttribute('data-state', 'selected');
+  }
+}
