@@ -11,7 +11,7 @@ const currentUrl = window.location.href,
       share = menu.querySelector('.share'),
       menuUrl = menu.querySelector('.menu__url'),
       btnCopy = menu.querySelector('.menu_copy'),
-      comments = menu.querySelector('.comments'),
+      menuComments = menu.querySelector('.comments'),
       burger = menu.querySelector('.burger'),
       currentUrlRegExp = /\?id=/;
 
@@ -25,7 +25,7 @@ function initial() {
   // если перешли по ссылке поделиться
   if(currentUrlRegExp.test(currentUrl)) {
     menu.setAttribute('data-state', 'selected');
-    comments.setAttribute('data-state', 'selected');
+    menuComments.setAttribute('data-state', 'selected');
     menuUrl.value = currentUrl;
     loadShare();
 
@@ -159,6 +159,32 @@ function cancelSelect(menuState = 'selected') {
 function selectMode() {
   cancelSelect();
   event.currentTarget.setAttribute('data-state', 'selected');
+}
+
+// комментарии
+
+const menuToggle = menu.querySelectorAll('.menu__toggle'),
+      comments = document.querySelectorAll('.comments__form');
+
+// назначение обработчиков
+
+Array.from(menuToggle).forEach(el => el.addEventListener('click', toggleComments));
+app.process.addListener('click', createCommentsForm);
+// переключение отображения комментариев на холсте
+function toggleComments() {
+  const value = event.currentTarget.value;
+
+  Array.from(comments).forEach(el => {
+    if(value === 'off') {
+      el.setAttribute('style', 'display: none');
+    } else {
+      el.removeAttribute('style');
+    }
+  });
+}
+
+function createCommentsForm() {
+  // найти в дз
 }
 
 
