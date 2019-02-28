@@ -12,39 +12,59 @@ const currentUrl = window.location.href,
       menuUrl = menu.querySelector('.menu__url'),
       btnCopy = menu.querySelector('.menu_copy'),
       comments = menu.querySelector('.comments'),
-      burger = menu.querySelector('.burger');
+      burger = menu.querySelector('.burger'),
+      currentUrlRegExp = /\?id=/;
 
 // инициализация
-menu.setAttribute('data-state', 'initial');
-img.src = '';
 
-if(sessionStorage.img) {
-  img.src = sessionStorage.img
-  menu.setAttribute('data-state', 'selected');
-  share.setAttribute('data-state', 'selected');
-  menuUrl.value = currentUrl + '?id=' + sessionStorage.id;
+function initial() {
+  // burger.setAttribute('style', 'display: none');
+  img.src = '';
+  cancelSelect('initial');
+
+  // если перешли по ссылке поделиться
+  if(currentUrlRegExp.test(currentUrl)) {
+    menu.setAttribute('data-state', 'selected');
+    comments.setAttribute('data-state', 'selected');
+    menuUrl.value = currentUrl;
+    loadShare();
+
+  // если перезагрузили страницу
+  } else if(sessionStorage.img) {
+    img.src = sessionStorage.img
+    menu.setAttribute('data-state', 'selected');
+    menuUrl.value = currentUrl.split(/\?id=/)[0] + '?id=' + sessionStorage.id;
+    share.setAttribute('data-state', 'selected');
+  }
 }
 
-loadShare(); // поздновато срабатывает
+initial();
 
-// назнвчение обработчиков
-menu.addEventListener('click', selectMode);
+// назначение обработчиков
+
 uploadButton.addEventListener('click', upload);
 app.addEventListener('drop', upload);
 app.addEventListener('dragover', event => event.preventDefault());
 btnCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.value));
-burger.addEventListener('click', cancelSelect);
+burger.addEventListener('click', () => cancelSelect('default'));
+
+Array.from(menu.children).forEach(el => {
+  if(el.classList.contains('mode')) {
+    el.addEventListener('click', selectMode);
+  }
+});
 
 // загрузка изображений
 function upload() {
   event.preventDefault();
   const imgSrcRegExp = /^file/;
+
   if(event.type !== 'drop') {
     createInput();
     return;
   }
 
-  if(imgSrcRegExp.test( img.src )) {
+  if(imgSrcRegExp.test(img.src)) {
     const file = event.dataTransfer.files[0];
     loadImg(file);
     return;
@@ -54,30 +74,32 @@ function upload() {
   errorMessage.textContent = 'Чтобы загрузить новое  изображение, пожалуйста воспользуйтесь пунктом "Загрузить новое" в меню';
 }
 
+// создаем инпут и вешаем обработчик
 function createInput() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/jpeg, image/png';
   input.click();
   input.addEventListener('change', () => loadImg());
-
 }
 
+// проверяем файл, загружаем картинку и отправляем на сервер
 function loadImg(myFile = '') {
+  const file = myFile ? myFile : event.target.files[0],
+        fileTypeRegExp = /image\/jpeg|image\/png/;
 
-  const file = myFile ? myFile : event.target.files[0];
-
-  const fileTypeRegExp = /image\/jpeg|image\/png/;
-  if (!fileTypeRegExp.test( file.type )) {
+  if (!fileTypeRegExp.test(file.type)) {
     error.setAttribute('style', 'display: inline-block');
     return;
   }
+
   error.setAttribute('style', 'display: none');
   imageLoader.setAttribute('style', 'display: inline-block');
 
   const formData = new FormData(),
         title = file.name.match(/\w*(?=.\w*$)/)[0],
         fileUrl = URL.createObjectURL(file);
+
   formData.append('title', title);
   formData.append('image', file);
 
@@ -85,13 +107,30 @@ function loadImg(myFile = '') {
       method: 'POST',
       body: formData,
     })
-    .then(onLoad)
+    .then((responce) => {
+      onLoad(responce);
+      cancelSelect();
+      menu.setAttribute('data-state', 'selected');
+      share.setAttribute('data-state', 'selected');
+    })
     .catch(err => {
       console.log(err);
     });
   }
 
+// загаржаем данные с севрвера, если перешли по ссылке поделиться
+function loadShare() {
+  if(currentUrlRegExp.test(currentUrl)) {
+    const id = currentUrl.match(/(?<=id=).*$/)[0];
+    fetch(`https://neto-api.herokuapp.com/pic/${id}`)
+    .then(onLoad)
+    .catch(err => {
+      console.log(err);
+    });
+  }
+}
 
+// проверяем данные с сервера и отображаем на холсте
 function onLoad(response) {
   imageLoader.setAttribute('style', 'display: none');
   response.text().then(text => {
@@ -102,15 +141,25 @@ function onLoad(response) {
       img.src = data.url;
       sessionStorage.img = data.url;
       sessionStorage.id = data.id;
-      menu.setAttribute('data-state', 'selected');
-      share.setAttribute('data-state', '');
-      comments.setAttribute('data-state', 'selected');
-      menuUrl.value = currentUrl + '?id=' + data.id;
+      menuUrl.value = currentUrl.split(/\?id=/)[0] + '?id=' + data.id;
     } else {
       error.setAttribute('style', 'display: inline-block');
       errorMessage.innerHTML = text;
     }
   });
+}
+
+// отмена выбора пункта меню
+function cancelSelect(menuState = 'selected') {
+  menu.setAttribute('data-state', menuState);
+  Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
+}
+
+// выбор пункта меню
+function selectMode() {
+  cancelSelect();
+  event.currentTarget.setAttribute('data-state', 'selected');
+}
 
 
   // const canvas = document.createElement('canvas');
@@ -119,31 +168,3 @@ function onLoad(response) {
   // canvas.height = img.height;
   // ctx.drawImage(img, 0, 0, img.width, img.height);
 
-}
-
-
-function loadShare() {
-  const id = currentUrl.match(/(?<=id=).*$/) ? currentUrl.match(/(?<=id=).*$/)[0] : '';
-
-  if(id) {
-    fetch(`https://neto-api.herokuapp.com/pic/${id}`)
-    .then(onLoad)
-    .catch(err => {
-      console.log(err);
-    });
-  }
-}
-
-function cancelSelect() {
-  menu.setAttribute('data-state', 'default');
-  Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
-}
-
-// доработать
-function selectMode() {
-  if(event.target.classList.contains('mode')) {
-    menu.setAttribute('data-state', 'selected');
-    Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
-    event.target.setAttribute('data-state', 'selected');
-  }
-}
