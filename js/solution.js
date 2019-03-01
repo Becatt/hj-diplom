@@ -166,10 +166,54 @@ function selectMode() {
 const menuToggle = menu.querySelectorAll('.menu__toggle'),
       comments = document.querySelectorAll('.comments__form');
 
+const commentsForm = {
+  tag: 'form',
+  cls: 'comments__form',
+    content: [{
+      tag: 'span',
+      cls: 'comments__marker',
+    },
+    {
+      tag: 'input',
+      cls: 'comments__marker-checkbox',
+      attrs: { type: 'checkbox' }
+    },
+    {
+      tag: 'div',
+      cls: 'comments__body',
+      content: [{
+        tag: 'div',
+        cls: 'comment',
+        content: {
+          tag: 'div',
+          cls: 'loader',
+          attrs: { style: 'display: none' },
+          content: [{tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}]
+        }
+      },
+      {
+        tag: 'textarea',
+        cls: 'comments__input',
+        attrs: { typy: 'text', placeholder: 'Напишите ответ...' }
+      },
+      {
+        tag: 'input',
+        cls: 'comments__close',
+        attrs: { type: 'button', value: 'Закрыть' }
+      },
+      {
+        tag: 'input',
+        cls: 'comments__submit',
+        attrs: { type: 'submit', value: 'Отправить' }
+      }
+      ]
+    }]
+}
+
 // назначение обработчиков
 
 Array.from(menuToggle).forEach(el => el.addEventListener('click', toggleComments));
-app.process.addListener('click', createCommentsForm);
+app.addEventListener('click', createCommentsForm);
 // переключение отображения комментариев на холсте
 function toggleComments() {
   const value = event.currentTarget.value;
@@ -184,7 +228,54 @@ function toggleComments() {
 }
 
 function createCommentsForm() {
-  // найти в дз
+
+  if(!event.target.classList.contains('current-image') && !event.target.classList.contains('app')) {
+    console.log(1);
+    return;
+  }
+  const x = event.pageX,
+        y = event.pageY;
+
+  const newConmmentsForm = createElement(commentsForm);
+  newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px`)
+  app.appendChild(newConmmentsForm);
+}
+
+function createElement(block) {
+ if ((block === undefined) || (block === null) || (block === false)) {
+      return document.createTextNode('');
+  }
+  if ((typeof block === 'number') || (typeof block === 'string') || (block === true)) {
+      return document.createTextNode(block.toString());
+  }
+
+  if (Array.isArray(block)) {
+    return block.reduce((f, item) => {
+      f.appendChild(
+          createElement(item)
+      );
+
+      return f;
+    }, document.createDocumentFragment());
+  }
+
+  const element = document.createElement(block.tag);
+
+  if (block.cls) {
+    element.classList.add(...[].concat(block.cls));
+  }
+
+  if (block.attrs) {
+    Object.keys(block.attrs).forEach(key => {
+      element.setAttribute(key, block.attrs[key]);
+    });
+  }
+
+  if (block.content) {
+      element.appendChild(createElement(block.content));
+  }
+
+  return element;
 }
 
 
