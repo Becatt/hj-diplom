@@ -210,10 +210,29 @@ const commentsForm = {
     }]
 }
 
+class Comment {
+  constructor(time, message) {
+    this.tag = 'div';
+    this.cls = 'comment',
+    this.content = [{
+      tag: 'p',
+      cls: 'comment__time',
+      content: time
+    },
+    {
+      tag: 'p',
+      cls: 'comment__message',
+      content: message
+    }]
+  }
+}
+
+
 // назначение обработчиков
 
 Array.from(menuToggle).forEach(el => el.addEventListener('click', toggleComments));
 app.addEventListener('click', createCommentsForm);
+
 // переключение отображения комментариев на холсте
 function toggleComments() {
   const value = event.currentTarget.value;
@@ -230,15 +249,50 @@ function toggleComments() {
 function createCommentsForm() {
 
   if(!event.target.classList.contains('current-image') && !event.target.classList.contains('app')) {
-    console.log(1);
     return;
   }
   const x = event.pageX,
         y = event.pageY;
 
-  const newConmmentsForm = createElement(commentsForm);
+  const newConmmentsForm = createElement(commentsForm),
+        commentsBody = newConmmentsForm.querySelector('.comments__body'),
+        submitBtn = newConmmentsForm.querySelector('.comments__submit'),
+        closeBtn = newConmmentsForm.querySelector('.comments__close'),
+        input = newConmmentsForm.querySelector('.comments__input'),
+        markerCheck = newConmmentsForm.querySelector('.comments__marker-checkbox');
+
+  // обраточки формы комментариев
+
+  submitBtn.addEventListener('click', newComment);
+  closeBtn.addEventListener('click', () => markerCheck.checked = false);
+  markerCheck.addEventListener('click', () => {
+    if(!event.currentTarget.checked) {
+      event.currentTarget.checked = true
+    }
+  });
+
+
+
+  // функции обраточиков
+  function newComment() {
+    event.preventDefault();
+    const curTime = new Date(Date.now());
+    let message = commentsBody.querySelector('.comments__input').value;
+    insertComment(curTime, message);
+    commentsBody.querySelector('.comments__input').value = '';
+  }
+
+  function insertComment(date, message) {
+    date = date.toLocaleString('ru-Ru');
+    const newComment = createElement(new Comment(date, message));
+    const loaderWrap = commentsBody.querySelector('.loader').parentElement;
+    commentsBody.insertBefore(newComment, loaderWrap);
+  }
+
   newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px`)
+
   app.appendChild(newConmmentsForm);
+
 }
 
 function createElement(block) {
