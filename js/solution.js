@@ -21,6 +21,7 @@ function initial() {
   // burger.setAttribute('style', 'display: none');
   img.src = '';
   cancelSelect('initial');
+  app.removeChild(app.querySelector('.comments__form'));
 
   // если перешли по ссылке поделиться
   if(currentUrlRegExp.test(currentUrl)) {
@@ -163,8 +164,7 @@ function selectMode() {
 
 // комментарии
 
-const menuToggle = menu.querySelectorAll('.menu__toggle'),
-      comments = document.querySelectorAll('.comments__form');
+const menuToggle = menu.querySelectorAll('.menu__toggle');
 
 const commentsForm = {
   tag: 'form',
@@ -251,26 +251,29 @@ function createCommentsForm() {
   if(!event.target.classList.contains('current-image') && !event.target.classList.contains('app')) {
     return;
   }
-  const x = event.pageX,
-        y = event.pageY;
 
-  const newConmmentsForm = createElement(commentsForm),
+  closeAllForms();
+
+  const x = event.pageX,
+        y = event.pageY,
+        newConmmentsForm = createElement(commentsForm),
         commentsBody = newConmmentsForm.querySelector('.comments__body'),
         submitBtn = newConmmentsForm.querySelector('.comments__submit'),
         closeBtn = newConmmentsForm.querySelector('.comments__close'),
         input = newConmmentsForm.querySelector('.comments__input'),
-        markerCheck = newConmmentsForm.querySelector('.comments__marker-checkbox');
+        markerCheck = newConmmentsForm.querySelector('.comments__marker-checkbox'),
+        loader = newConmmentsForm.querySelector('.loader');
 
   // обраточки формы комментариев
 
   submitBtn.addEventListener('click', newComment);
   closeBtn.addEventListener('click', () => markerCheck.checked = false);
-  markerCheck.addEventListener('click', () => {
-    if(!event.currentTarget.checked) {
-      event.currentTarget.checked = true
-    }
-  });
+  input.addEventListener('input', showLoader);
+  markerCheck.addEventListener('click', openForm);
 
+  newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px`)
+  app.appendChild(newConmmentsForm);
+  markerCheck.checked = true;
 
 
   // функции обраточиков
@@ -279,20 +282,32 @@ function createCommentsForm() {
     const curTime = new Date(Date.now());
     let message = commentsBody.querySelector('.comments__input').value;
     insertComment(curTime, message);
-    commentsBody.querySelector('.comments__input').value = '';
+    input.value = '';
   }
 
   function insertComment(date, message) {
     date = date.toLocaleString('ru-Ru');
     const newComment = createElement(new Comment(date, message));
-    const loaderWrap = commentsBody.querySelector('.loader').parentElement;
-    commentsBody.insertBefore(newComment, loaderWrap);
+    commentsBody.insertBefore(newComment, loader.parentElement);
+    loader.setAttribute('style', 'display: none');
   }
 
-  newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px`)
+  function showLoader() {
+    const mes = event.currentTarget.value;
+    loader.removeAttribute('style');
+    setTimeout(() => {
+      if(mes === input.value) {
+        loader.setAttribute('style', 'display: none')
+      }
+    }, 5000); // скрываем лоадер, если пользователь не печатает более 5 секунды
+  }
 
-  app.appendChild(newConmmentsForm);
-
+  function openForm() {
+    closeAllForms();
+    if(!event.currentTarget.checked) {
+      event.currentTarget.checked = true;
+    }
+  }
 }
 
 function createElement(block) {
@@ -330,6 +345,13 @@ function createElement(block) {
   }
 
   return element;
+}
+
+function closeAllForms() {
+  const forms = app.querySelectorAll('.comments__form');
+  Array.from(forms).forEach((el) => {
+    el.querySelector('.comments__marker-checkbox').checked = false;
+  });
 }
 
 
