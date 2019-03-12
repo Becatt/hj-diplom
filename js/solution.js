@@ -1,4 +1,5 @@
 'use strict';
+let connection;
 
 const currentUrl = window.location.href,
       app = document.querySelector('.app'),
@@ -18,10 +19,12 @@ const currentUrl = window.location.href,
 // инициализация
 
 function initial() {
-  // burger.setAttribute('style', 'display: none');
   img.src = '';
+  img.draggable = false;
   cancelSelect('initial');
   app.removeChild(app.querySelector('.comments__form'));
+
+  burger.hidden = true;
 
   // если перешли по ссылке поделиться
   if(currentUrlRegExp.test(currentUrl)) {
@@ -37,9 +40,35 @@ function initial() {
     menuUrl.value = currentUrl.split(/\?id=/)[0] + '?id=' + sessionStorage.id;
     share.setAttribute('data-state', 'selected');
   }
+
+  if(sessionStorage.id) {  // здесь все веб сокет, причем соединение устанавливается 2 раза и это как-то криво еще на 175 строчке
+    connection = new WebSocket(`wss://neto-api.herokuapp.com/pic/${sessionStorage.id}`);
+    console.log('test');
+connection.addEventListener('mask', event => {
+  console.log('mask');
+    const data = JSON.parse(event.data);
+    console.log('mask: ' + data);
+
+  });
+
+
+connection.addEventListener('error', event => {
+    const data = JSON.parse(event.data);
+    console.log('error: ' + data);
+
+  });
+
+connection.addEventListener('pic', event => {
+    const data = JSON.parse(event.data);
+    console.log('pic: ' + data);
+
+  });
+
+  }
 }
 
 initial();
+
 
 // назначение обработчиков
 
@@ -55,7 +84,7 @@ Array.from(menu.children).forEach(el => {
   }
 });
 
-// загрузка изображений
+// режим публикация
 function upload() {
   event.preventDefault();
   const imgSrcRegExp = /^file/;
@@ -143,6 +172,7 @@ function onLoad(response) {
       sessionStorage.img = data.url;
       sessionStorage.id = data.id;
       menuUrl.value = currentUrl.split(/\?id=/)[0] + '?id=' + data.id;
+      connection = new WebSocket(`wss://neto-api.herokuapp.com/pic/${data.id}`); // веб сокет
     } else {
       error.setAttribute('style', 'display: inline-block');
       errorMessage.innerHTML = text;
@@ -150,7 +180,7 @@ function onLoad(response) {
   });
 }
 
-// отмена выбора пункта меню
+// отмена выбора пункта меню - Че-то название не нравится
 function cancelSelect(menuState = 'selected') {
   menu.setAttribute('data-state', menuState);
   Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
@@ -162,7 +192,7 @@ function selectMode() {
   event.currentTarget.setAttribute('data-state', 'selected');
 }
 
-// комментарии
+// режим комментирования
 
 const menuToggle = menu.querySelectorAll('.menu__toggle');
 
@@ -187,7 +217,7 @@ const commentsForm = {
         content: {
           tag: 'div',
           cls: 'loader',
-          attrs: { style: 'display: none' },
+          attrs: { hidden: true },
           content: [{tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}]
         }
       },
@@ -235,13 +265,14 @@ app.addEventListener('click', createCommentsForm);
 
 // переключение отображения комментариев на холсте
 function toggleComments() {
-  const value = event.currentTarget.value;
+  const value = event.currentTarget.value,
+  comments = app.querySelectorAll('.comments__form');
 
   Array.from(comments).forEach(el => {
     if(value === 'off') {
-      el.setAttribute('style', 'display: none');
+      el.hidden = true;
     } else {
-      el.removeAttribute('style');
+      el.hidden = false;
     }
   });
 }
@@ -252,17 +283,26 @@ function createCommentsForm() {
     return;
   }
 
+  if(menuComments.getAttribute('data-state') !== 'selected') {
+    return;
+  }
+
+  // если включен режим скрыть комментарии
+  if(menuToggle[1].checked) {
+    return;
+  }
+
   closeAllForms();
 
-  const x = event.pageX,
-        y = event.pageY,
-        newConmmentsForm = createElement(commentsForm),
+  const newConmmentsForm = createElement(commentsForm),
         commentsBody = newConmmentsForm.querySelector('.comments__body'),
         submitBtn = newConmmentsForm.querySelector('.comments__submit'),
         closeBtn = newConmmentsForm.querySelector('.comments__close'),
         input = newConmmentsForm.querySelector('.comments__input'),
         markerCheck = newConmmentsForm.querySelector('.comments__marker-checkbox'),
-        loader = newConmmentsForm.querySelector('.loader');
+        loader = newConmmentsForm.querySelector('.loader'),
+        x = event.pageX + markerCheck.width/2,
+        y = event.pageY + markerCheck.height/2;
 
   // обраточки формы комментариев
 
@@ -272,6 +312,7 @@ function createCommentsForm() {
   markerCheck.addEventListener('click', openForm);
 
   newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px`)
+
   app.appendChild(newConmmentsForm);
   markerCheck.checked = true;
 
@@ -289,15 +330,15 @@ function createCommentsForm() {
     date = date.toLocaleString('ru-Ru');
     const newComment = createElement(new Comment(date, message));
     commentsBody.insertBefore(newComment, loader.parentElement);
-    loader.setAttribute('style', 'display: none');
+    loader.hidden = true;
   }
 
   function showLoader() {
     const mes = event.currentTarget.value;
-    loader.removeAttribute('style');
+    loader.hidden = false;
     setTimeout(() => {
       if(mes === input.value) {
-        loader.setAttribute('style', 'display: none')
+        loader.hidden = true;
       }
     }, 5000); // скрываем лоадер, если пользователь не печатает более 5 секунды
   }
@@ -354,10 +395,210 @@ function closeAllForms() {
   });
 }
 
+// режим рисования
+const menuDraw = menu.querySelector('.draw'),
+      drawTools = menu.querySelector('.draw-tools'),
+      colors = drawTools.querySelectorAll('.menu__color');
 
-  // const canvas = document.createElement('canvas');
-  // const ctx = canvas.getContext('2d');
-  // canvas.width = img.width;
-  // canvas.height = img.height;
-  // ctx.drawImage(img, 0, 0, img.width, img.height);
+const brushRadius = 4;
+let curves = [];
+let drawing = false;
+let needsRepaint = false;
+let ZIndex = 0;
+
+function getHue() {
+  let color;
+  Array.from(colors).forEach(el => {
+    if(el.checked) {
+      switch(el.value) {
+        case 'red':
+          color = '#ea5d56';
+          break;
+        case 'yellow':
+          color = '#f3d135';
+          break;
+        case 'green':
+          color = '#6cbe47';
+          break;
+        case 'blue':
+          color = '#53a7f5';
+          break;
+        case 'purple':
+          color = '#b36ade';
+          break;
+      }
+    }
+  })
+  return color;
+}
+// img.addEventListener("mousedown", createMask)
+
+img.addEventListener('mousedown', createMask);
+
+
+function createMask () {
+  if(menuDraw .getAttribute('data-state') !== 'selected') {
+      return;
+    }
+  // ZIndex++;
+
+    const canvas = document.createElement('canvas');
+    app.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    canvas.setAttribute('style', `position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: block; z-index: 10`);
+
+  // curves and figures
+  function circle(point) {
+    ctx.fillStyle = getHue();
+    ctx.beginPath();
+    ctx.arc(...point, brushRadius / 2, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  function smoothCurveBetween (p1, p2) {
+    // Bezier control point
+    const cp = p1.map((coord, idx) => (coord + p2[idx]) / 2);
+    ctx.quadraticCurveTo(...p1, ...cp);
+  }
+
+  function smoothCurve(points) {
+    ctx.beginPath();
+    ctx.lineWidth = brushRadius;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    ctx.moveTo(...points[0]);
+
+    for(let i = 1; i < points.length - 1; i++) {
+      smoothCurveBetween(points[i], points[i + 1]);
+    }
+    ctx.strokeStyle = getHue();
+    ctx.stroke();
+    ctx.closePath();
+  }
+
+  // events
+
+  canvas.addEventListener("mousedown", (evt) => {
+    drawing = true;
+
+    const curve = []; // create a new curve
+
+    curve.push([evt.offsetX, evt.offsetY]); // add a new point
+    curves.push(curve); // add the curve to the array of curves
+    needsRepaint = true;
+  });
+
+  canvas.addEventListener("mouseup", (evt) => {
+    drawing = false;
+    curves = [];
+    const image = document.createElement('img');
+    image.src = canvas.toDataURL();
+    app.appendChild(image);
+    // ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => connection.send(blob)); // веб сокет
+  });
+
+  canvas.addEventListener("mouseleave", (evt) => {
+    drawing = false;
+  });
+
+  canvas.addEventListener("mousemove", (evt) => {
+    if (drawing) {
+      // add a point
+      const point = [evt.offsetX, evt.offsetY];
+      curves[curves.length - 1].push(point);
+      needsRepaint = true;
+    }
+  });
+
+  // rendering
+  function repaint () {
+    curves
+      .forEach((curve) => {
+        // first...
+        circle(curve[0]);
+
+        // the body is compraised of lines
+        smoothCurve(curve);
+      });
+  }
+
+  function tick () {
+    if(needsRepaint) {
+      repaint();
+      needsRepaint = false;
+    }
+
+    window.requestAnimationFrame(tick);
+  }
+
+  tick();
+}
+
+
+// веб сокет
+
+// плавающее меню
+const dragMenu = menu.querySelector('.drag');
+
+let isMoved = false;
+let minY, minX, maxX, maxY;
+let shiftX = 0;
+let shiftY = 0;
+
+const dragStart = event => {
+  isMoved = true;
+    minY = app.offsetTop;
+    minX = app.offsetLeft;
+    maxX = app.offsetLeft + app.offsetWidth - menu.offsetWidth;
+    maxY = app.offsetTop + app.offsetHeight - menu.offsetHeight;
+    shiftX = event.pageX - event.target.getBoundingClientRect().left - window.pageXOffset;
+    shiftY = event.pageY - event.target.getBoundingClientRect().top - window.pageYOffset;
+
+};
+
+const drag = throttle((x, y) => {
+  if (isMoved) {
+    x = x - shiftX;
+    y = y - shiftY;
+    x = Math.min(x, maxX);
+    y = Math.min(y, maxY);
+    x = Math.max(x, minX);
+    y = Math.max(y, minY);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  }
+});
+const drop = event => {
+  if (isMoved) {
+    const check = document.elementFromPoint(event.clientX, event.clientY);
+    isMoved = false;
+  }
+};
+
+dragMenu.addEventListener('mousedown', dragStart);
+document.addEventListener('mousemove', event => drag(event.pageX, event.pageY));
+document.addEventListener('mouseup', drop);
+
+dragMenu.addEventListener('touchstart', event => dragStart(event.touches[0]));
+document.addEventListener('touchmove', event => drag(event.touches[0].pageX, event.touches[0].pageY));
+document.addEventListener('touchend', event => drop(event.changedTouches[0]));
+
+function throttle(callback) {
+  let isWaiting = false;
+  return function () {
+    if (!isWaiting) {
+      callback.apply(this, arguments);
+      isWaiting = true;
+      requestAnimationFrame(() => {
+        isWaiting = false;
+      });
+    }
+  };
+}
+
+
 
