@@ -2,6 +2,7 @@
 let connection;
 
 const currentUrl = window.location.href,
+      urlSplit = currentUrl.split(/\?id=/),
       app = document.querySelector('.app'),
       menu = app.querySelector('.menu'),
       uploadButton = menu.querySelector('.new'),
@@ -13,535 +14,9 @@ const currentUrl = window.location.href,
       menuUrl = menu.querySelector('.menu__url'),
       btnCopy = menu.querySelector('.menu_copy'),
       menuComments = menu.querySelector('.comments'),
-      burger = menu.querySelector('.burger'),
-      currentUrlRegExp = /\?id=/;
+      burger = menu.querySelector('.burger');
 
-// инициализация
-
-function initial() {
-  img.src = '';
-  img.draggable = false;
-  cancelSelect('initial');
-  app.removeChild(app.querySelector('.comments__form'));
-
-  burger.hidden = true;
-
-  // если перешли по ссылке поделиться
-  if(currentUrlRegExp.test(currentUrl)) {
-    menu.setAttribute('data-state', 'selected');
-    menuComments.setAttribute('data-state', 'selected');
-    menuUrl.value = currentUrl;
-    loadShare();
-
-  // если перезагрузили страницу
-  } else if(sessionStorage.img) {
-    img.src = sessionStorage.img
-    menu.setAttribute('data-state', 'selected');
-    menuUrl.value = currentUrl.split(/\?id=/)[0] + '?id=' + sessionStorage.id;
-    share.setAttribute('data-state', 'selected');
-  }
-
-  if(sessionStorage.id) {  // здесь все веб сокет, причем соединение устанавливается 2 раза и это как-то криво еще на 175 строчке
-    connection = new WebSocket(`wss://neto-api.herokuapp.com/pic/${sessionStorage.id}`);
-    console.log('test');
-connection.addEventListener('mask', event => {
-  console.log('mask');
-    const data = JSON.parse(event.data);
-    console.log('mask: ' + data);
-
-  });
-
-
-connection.addEventListener('error', event => {
-    const data = JSON.parse(event.data);
-    console.log('error: ' + data);
-
-  });
-
-connection.addEventListener('pic', event => {
-    const data = JSON.parse(event.data);
-    console.log('pic: ' + data);
-
-  });
-
-  }
-}
-
-initial();
-
-
-// назначение обработчиков
-
-uploadButton.addEventListener('click', upload);
-app.addEventListener('drop', upload);
-app.addEventListener('dragover', event => event.preventDefault());
-btnCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.value));
-burger.addEventListener('click', () => cancelSelect('default'));
-
-Array.from(menu.children).forEach(el => {
-  if(el.classList.contains('mode')) {
-    el.addEventListener('click', selectMode);
-  }
-});
-
-// режим публикация
-function upload() {
-  event.preventDefault();
-  const imgSrcRegExp = /^file/;
-
-  if(event.type !== 'drop') {
-    createInput();
-    return;
-  }
-
-  if(imgSrcRegExp.test(img.src)) {
-    const file = event.dataTransfer.files[0];
-    loadImg(file);
-    return;
-  }
-
-  error.setAttribute('style', 'display: inline-block');
-  errorMessage.textContent = 'Чтобы загрузить новое  изображение, пожалуйста воспользуйтесь пунктом "Загрузить новое" в меню';
-}
-
-// создаем инпут и вешаем обработчик
-function createInput() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/jpeg, image/png';
-  input.click();
-  input.addEventListener('change', () => loadImg());
-}
-
-// проверяем файл, загружаем картинку и отправляем на сервер
-function loadImg(myFile = '') {
-  const file = myFile ? myFile : event.target.files[0],
-        fileTypeRegExp = /image\/jpeg|image\/png/;
-
-  if (!fileTypeRegExp.test(file.type)) {
-    error.setAttribute('style', 'display: inline-block');
-    return;
-  }
-
-  error.setAttribute('style', 'display: none');
-  imageLoader.setAttribute('style', 'display: inline-block');
-
-  const formData = new FormData(),
-        title = file.name.match(/\w*(?=.\w*$)/)[0],
-        fileUrl = URL.createObjectURL(file);
-
-  formData.append('title', title);
-  formData.append('image', file);
-
-  fetch('https://neto-api.herokuapp.com/pic', {
-      method: 'POST',
-      body: formData,
-    })
-    .then((responce) => {
-      onLoad(responce);
-      cancelSelect();
-      menu.setAttribute('data-state', 'selected');
-      share.setAttribute('data-state', 'selected');
-    })
-    .catch(err => {
-      console.log(err);
-    });
-  }
-
-// загаржаем данные с севрвера, если перешли по ссылке поделиться
-function loadShare() {
-  if(currentUrlRegExp.test(currentUrl)) {
-    const id = currentUrl.match(/(?<=id=).*$/)[0];
-    fetch(`https://neto-api.herokuapp.com/pic/${id}`)
-    .then(onLoad)
-    .catch(err => {
-      console.log(err);
-    });
-  }
-}
-
-// проверяем данные с сервера и отображаем на холсте
-function onLoad(response) {
-  imageLoader.setAttribute('style', 'display: none');
-  response.text().then(text => {
-    // console.log(text);
-
-    if(response.ok) {
-      const data = JSON.parse(text);
-      img.src = data.url;
-      sessionStorage.img = data.url;
-      sessionStorage.id = data.id;
-      menuUrl.value = currentUrl.split(/\?id=/)[0] + '?id=' + data.id;
-      connection = new WebSocket(`wss://neto-api.herokuapp.com/pic/${data.id}`); // веб сокет
-    } else {
-      error.setAttribute('style', 'display: inline-block');
-      errorMessage.innerHTML = text;
-    }
-  });
-}
-
-// отмена выбора пункта меню - Че-то название не нравится
-function cancelSelect(menuState = 'selected') {
-  menu.setAttribute('data-state', menuState);
-  Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
-}
-
-// выбор пункта меню
-function selectMode() {
-  cancelSelect();
-  event.currentTarget.setAttribute('data-state', 'selected');
-}
-
-// режим комментирования
-
-const menuToggle = menu.querySelectorAll('.menu__toggle');
-
-const commentsForm = {
-  tag: 'form',
-  cls: 'comments__form',
-    content: [{
-      tag: 'span',
-      cls: 'comments__marker',
-    },
-    {
-      tag: 'input',
-      cls: 'comments__marker-checkbox',
-      attrs: { type: 'checkbox' }
-    },
-    {
-      tag: 'div',
-      cls: 'comments__body',
-      content: [{
-        tag: 'div',
-        cls: 'comment',
-        content: {
-          tag: 'div',
-          cls: 'loader',
-          attrs: { hidden: true },
-          content: [{tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}]
-        }
-      },
-      {
-        tag: 'textarea',
-        cls: 'comments__input',
-        attrs: { typy: 'text', placeholder: 'Напишите ответ...' }
-      },
-      {
-        tag: 'input',
-        cls: 'comments__close',
-        attrs: { type: 'button', value: 'Закрыть' }
-      },
-      {
-        tag: 'input',
-        cls: 'comments__submit',
-        attrs: { type: 'submit', value: 'Отправить' }
-      }
-      ]
-    }]
-}
-
-class Comment {
-  constructor(time, message) {
-    this.tag = 'div';
-    this.cls = 'comment',
-    this.content = [{
-      tag: 'p',
-      cls: 'comment__time',
-      content: time
-    },
-    {
-      tag: 'p',
-      cls: 'comment__message',
-      content: message
-    }]
-  }
-}
-
-
-// назначение обработчиков
-
-Array.from(menuToggle).forEach(el => el.addEventListener('click', toggleComments));
-app.addEventListener('click', createCommentsForm);
-
-// переключение отображения комментариев на холсте
-function toggleComments() {
-  const value = event.currentTarget.value,
-  comments = app.querySelectorAll('.comments__form');
-
-  Array.from(comments).forEach(el => {
-    if(value === 'off') {
-      el.hidden = true;
-    } else {
-      el.hidden = false;
-    }
-  });
-}
-
-function createCommentsForm() {
-
-  if(!event.target.classList.contains('current-image') && !event.target.classList.contains('app')) {
-    return;
-  }
-
-  if(menuComments.getAttribute('data-state') !== 'selected') {
-    return;
-  }
-
-  // если включен режим скрыть комментарии
-  if(menuToggle[1].checked) {
-    return;
-  }
-
-  closeAllForms();
-
-  const newConmmentsForm = createElement(commentsForm),
-        commentsBody = newConmmentsForm.querySelector('.comments__body'),
-        submitBtn = newConmmentsForm.querySelector('.comments__submit'),
-        closeBtn = newConmmentsForm.querySelector('.comments__close'),
-        input = newConmmentsForm.querySelector('.comments__input'),
-        markerCheck = newConmmentsForm.querySelector('.comments__marker-checkbox'),
-        loader = newConmmentsForm.querySelector('.loader'),
-        x = event.pageX + markerCheck.width/2,
-        y = event.pageY + markerCheck.height/2;
-
-  // обраточки формы комментариев
-
-  submitBtn.addEventListener('click', newComment);
-  closeBtn.addEventListener('click', () => markerCheck.checked = false);
-  input.addEventListener('input', showLoader);
-  markerCheck.addEventListener('click', openForm);
-
-  newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px`)
-
-  app.appendChild(newConmmentsForm);
-  markerCheck.checked = true;
-
-
-  // функции обраточиков
-  function newComment() {
-    event.preventDefault();
-    const curTime = new Date(Date.now());
-    let message = commentsBody.querySelector('.comments__input').value;
-    insertComment(curTime, message);
-    input.value = '';
-  }
-
-  function insertComment(date, message) {
-    date = date.toLocaleString('ru-Ru');
-    const newComment = createElement(new Comment(date, message));
-    commentsBody.insertBefore(newComment, loader.parentElement);
-    loader.hidden = true;
-  }
-
-  function showLoader() {
-    const mes = event.currentTarget.value;
-    loader.hidden = false;
-    setTimeout(() => {
-      if(mes === input.value) {
-        loader.hidden = true;
-      }
-    }, 5000); // скрываем лоадер, если пользователь не печатает более 5 секунды
-  }
-
-  function openForm() {
-    closeAllForms();
-    if(!event.currentTarget.checked) {
-      event.currentTarget.checked = true;
-    }
-  }
-}
-
-function createElement(block) {
- if ((block === undefined) || (block === null) || (block === false)) {
-      return document.createTextNode('');
-  }
-  if ((typeof block === 'number') || (typeof block === 'string') || (block === true)) {
-      return document.createTextNode(block.toString());
-  }
-
-  if (Array.isArray(block)) {
-    return block.reduce((f, item) => {
-      f.appendChild(
-          createElement(item)
-      );
-
-      return f;
-    }, document.createDocumentFragment());
-  }
-
-  const element = document.createElement(block.tag);
-
-  if (block.cls) {
-    element.classList.add(...[].concat(block.cls));
-  }
-
-  if (block.attrs) {
-    Object.keys(block.attrs).forEach(key => {
-      element.setAttribute(key, block.attrs[key]);
-    });
-  }
-
-  if (block.content) {
-      element.appendChild(createElement(block.content));
-  }
-
-  return element;
-}
-
-function closeAllForms() {
-  const forms = app.querySelectorAll('.comments__form');
-  Array.from(forms).forEach((el) => {
-    el.querySelector('.comments__marker-checkbox').checked = false;
-  });
-}
-
-// режим рисования
-const menuDraw = menu.querySelector('.draw'),
-      drawTools = menu.querySelector('.draw-tools'),
-      colors = drawTools.querySelectorAll('.menu__color');
-
-const brushRadius = 4;
-let curves = [];
-let drawing = false;
-let needsRepaint = false;
-let ZIndex = 0;
-
-function getHue() {
-  let color;
-  Array.from(colors).forEach(el => {
-    if(el.checked) {
-      switch(el.value) {
-        case 'red':
-          color = '#ea5d56';
-          break;
-        case 'yellow':
-          color = '#f3d135';
-          break;
-        case 'green':
-          color = '#6cbe47';
-          break;
-        case 'blue':
-          color = '#53a7f5';
-          break;
-        case 'purple':
-          color = '#b36ade';
-          break;
-      }
-    }
-  })
-  return color;
-}
-// img.addEventListener("mousedown", createMask)
-
-img.addEventListener('mousedown', createMask);
-
-
-function createMask () {
-  if(menuDraw .getAttribute('data-state') !== 'selected') {
-      return;
-    }
-  // ZIndex++;
-
-    const canvas = document.createElement('canvas');
-    app.appendChild(canvas);
-    const ctx = canvas.getContext('2d');
-    canvas.width = img.width;
-    canvas.height = img.height;
-    canvas.setAttribute('style', `position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: block; z-index: 10`);
-
-  // curves and figures
-  function circle(point) {
-    ctx.fillStyle = getHue();
-    ctx.beginPath();
-    ctx.arc(...point, brushRadius / 2, 0, 2 * Math.PI);
-    ctx.fill();
-  }
-
-  function smoothCurveBetween (p1, p2) {
-    // Bezier control point
-    const cp = p1.map((coord, idx) => (coord + p2[idx]) / 2);
-    ctx.quadraticCurveTo(...p1, ...cp);
-  }
-
-  function smoothCurve(points) {
-    ctx.beginPath();
-    ctx.lineWidth = brushRadius;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    ctx.moveTo(...points[0]);
-
-    for(let i = 1; i < points.length - 1; i++) {
-      smoothCurveBetween(points[i], points[i + 1]);
-    }
-    ctx.strokeStyle = getHue();
-    ctx.stroke();
-    ctx.closePath();
-  }
-
-  // events
-
-  canvas.addEventListener("mousedown", (evt) => {
-    drawing = true;
-
-    const curve = []; // create a new curve
-
-    curve.push([evt.offsetX, evt.offsetY]); // add a new point
-    curves.push(curve); // add the curve to the array of curves
-    needsRepaint = true;
-  });
-
-  canvas.addEventListener("mouseup", (evt) => {
-    drawing = false;
-    curves = [];
-    const image = document.createElement('img');
-    image.src = canvas.toDataURL();
-    app.appendChild(image);
-    // ctx.clearRect(0, 0, canvas.width, canvas.height);
-    canvas.toBlob(blob => connection.send(blob)); // веб сокет
-  });
-
-  canvas.addEventListener("mouseleave", (evt) => {
-    drawing = false;
-  });
-
-  canvas.addEventListener("mousemove", (evt) => {
-    if (drawing) {
-      // add a point
-      const point = [evt.offsetX, evt.offsetY];
-      curves[curves.length - 1].push(point);
-      needsRepaint = true;
-    }
-  });
-
-  // rendering
-  function repaint () {
-    curves
-      .forEach((curve) => {
-        // first...
-        circle(curve[0]);
-
-        // the body is compraised of lines
-        smoothCurve(curve);
-      });
-  }
-
-  function tick () {
-    if(needsRepaint) {
-      repaint();
-      needsRepaint = false;
-    }
-
-    window.requestAnimationFrame(tick);
-  }
-
-  tick();
-}
-
-
-// веб сокет
-
-// плавающее меню
+// меню
 const dragMenu = menu.querySelector('.drag');
 
 let isMoved = false;
@@ -600,5 +75,164 @@ function throttle(callback) {
   };
 }
 
+function setMenuState(setMenuState = 'selected') {
+  menu.setAttribute('data-state', setMenuState);
+  Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
+}
 
+// выбор пункта меню
+function selectMode() {
+  setMenuState();
+  event.currentTarget.setAttribute('data-state', 'selected');
+}
+
+burger.addEventListener('click', () => setMenuState('default'));
+
+// выбор пункта меню
+Array.from(menu.children).forEach(el => {
+  if(el.classList.contains('mode')) {
+    el.addEventListener('click', selectMode);
+  }
+});
+
+// инициализация
+
+function initial() {
+  img.src = '';
+  img.draggable = false;
+  setMenuState('initial');
+  app.removeChild(app.querySelector('.comments__form'));
+  console.log(urlSplit[1]);
+  console.log(sessionStorage.id);
+  menuUrl.value = currentUrl;
+  console.log(sessionStorage.flag);
+
+  // если загрузили картинку
+  if(sessionStorage.flag === 'true') {
+     menu.setAttribute('data-state', 'selected');
+      share.setAttribute('data-state', 'selected');
+      sessionStorage.flag = 'false';
+  // если нажали обновить
+  } else if(urlSplit[1] === sessionStorage.id) {
+      setMenuState('default');
+  // если перешли по ссылке
+  } else {
+      menu.setAttribute('data-state', 'selected');
+      menuComments.setAttribute('data-state', 'selected');
+  }
+
+loadShare();
+  // везде вызов loadShare, как-то криво
+}
+
+initial();
+
+// режим публикации
+// назнаение обработчиков
+
+uploadButton.addEventListener('click', upload);
+app.addEventListener('drop', upload);
+app.addEventListener('dragover', event => event.preventDefault());
+btnCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.value));
+
+// функции
+
+function upload() {
+
+  event.preventDefault();
+  const imgSrcRegExp = /^file/;
+
+  if(event.type !== 'drop') {
+    createInput();
+    return;
+  }
+
+  if(imgSrcRegExp.test(img.src)) {
+    const file = event.dataTransfer.files[0];
+    loadImg(file);
+    return;
+  }
+  error.setAttribute('style', 'display: inline-block');
+  errorMessage.textContent = 'Чтобы загрузить новое  изображение, пожалуйста воспользуйтесь пунктом "Загрузить новое" в меню';
+}
+
+// создаем input и вешаем обработчик
+function createInput() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg, image/png';
+  input.click();
+  input.addEventListener('change', () => loadImg());
+}
+
+// проверяем файл, загружаем картинку и отправляем на сервер
+function loadImg(myFile = '') {
+  const file = myFile ? myFile : event.target.files[0],
+        fileTypeRegExp = /image\/jpeg|image\/png/;
+
+  if (!fileTypeRegExp.test(file.type)) {
+    error.setAttribute('style', 'display: inline-block');
+    errorMessage.textContent = 'Неверный формат файла. Пожалуйста, выберите изображение в формате .jpg или .png.';
+    return;
+  }
+
+  error.setAttribute('style', 'display: none');
+  imageLoader.setAttribute('style', 'display: inline-block');
+
+  const formData = new FormData(),
+        title = file.name.match(/\w*(?=.\w*$)/)[0],
+        fileUrl = URL.createObjectURL(file);
+
+  formData.append('title', title);
+  formData.append('image', file);
+
+  fetch('https://neto-api.herokuapp.com/pic', {
+      method: 'POST',
+      body: formData,
+    })
+    .then((responce) => {
+      onLoad(responce);
+      setMenuState();
+      menu.setAttribute('data-state', 'selected');
+      share.setAttribute('data-state', 'selected');
+    })
+    .catch(err => {
+      imageLoader.setAttribute('style', 'display: none');
+      error.setAttribute('style', 'display: inline-block');
+      errorMessage.textContent = err;
+    });
+}
+
+// загружаем данные с севрвера с id из url
+function loadShare() {
+  if(urlSplit[1]) {
+    fetch(`https://neto-api.herokuapp.com/pic/${urlSplit[1]}`)
+    .then(onLoad)
+    .catch(err => {
+      console.log(err);
+    });
+  }
+}
+
+function onLoad(response) {
+  imageLoader.setAttribute('style', 'display: none');
+  response.text().then(text => {
+    console.log(window.history.state);
+
+    if(response.ok) {
+      const data = JSON.parse(text);
+      sessionStorage.id = data.id;
+
+      if(window.location.href === `${urlSplit[0]}?id=${data.id}`) {
+        img.src = data.url;
+      } else {
+        sessionStorage.flag = 'true'; // с булевым значением не работает
+        window.location.href = `${urlSplit[0]}?id=${data.id}`
+      }
+    } else {
+      error.setAttribute('style', 'display: inline-block');
+      errorMessage.innerHTML = text;
+    }
+  });
+}
 
