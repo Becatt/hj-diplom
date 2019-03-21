@@ -18,6 +18,9 @@ const currentUrl = window.location.href,
 
 const menuToggle = menu.querySelectorAll('.menu__toggle');
 const dragMenu = menu.querySelector('.drag');
+const canvas = document.createElement('canvas');
+const mask = document.createElement('img');
+const ctx = canvas.getContext('2d');
 
 // меню
 
@@ -34,13 +37,28 @@ function selectMode() {
 
 burger.addEventListener('click', () => setMenuState('default'));
 
-// выбор пункта меню
 Array.from(menu.children).forEach(el => {
   if(el.classList.contains('mode')) {
     el.addEventListener('click', selectMode);
   }
 });
 
+// Установка режима меню при загрузке старницы
+
+function setMode() {
+  if(sessionStorage.flag === 'true') {
+    menu.setAttribute('data-state', 'selected');
+    share.setAttribute('data-state', 'selected');
+    sessionStorage.flag = 'false';
+  // если нажали обновить
+  } else if(urlSplit[1] && urlSplit[1] === sessionStorage.id) {
+      setMenuState('default');
+  // если перешли по ссылке
+  } else if(urlSplit[1]){
+      menu.setAttribute('data-state', 'selected');
+      menuComments.setAttribute('data-state', 'selected');
+  }
+}
 
 // плавающее меню
 let isMoved = false;
@@ -107,23 +125,9 @@ function initial() {
   setMenuState('initial');
   app.removeChild(app.querySelector('.comments__form'));
   menuUrl.value = currentUrl;
-
-  // если загрузили картинку
-  if(sessionStorage.flag === 'true') {
-     menu.setAttribute('data-state', 'selected');
-      share.setAttribute('data-state', 'selected');
-      sessionStorage.flag = 'false';
-  // если нажали обновить
-  } else if(urlSplit[1] === sessionStorage.id) {
-      setMenuState('default');
-  // если перешли по ссылке
-  } else {
-      menu.setAttribute('data-state', 'selected');
-      menuComments.setAttribute('data-state', 'selected');
-  }
-
-loadShare();
-startWebSocket();
+  startWebSocket();
+  setMode();
+  setTimeout(addCanvas, 2000); // Очень ненадежнно, надо бы на промис переделать
 }
 
 initial();
@@ -193,9 +197,6 @@ function loadImg(myFile = '') {
     })
     .then((responce) => {
       onLoad(responce);
-      setMenuState();
-      menu.setAttribute('data-state', 'selected');
-      share.setAttribute('data-state', 'selected');
     })
     .catch(err => {
       imageLoader.setAttribute('style', 'display: none');
@@ -204,21 +205,9 @@ function loadImg(myFile = '') {
     });
 }
 
-// загружаем данные с севрвера с id из url
-function loadShare() {
-  if(urlSplit[1]) {
-    fetch(`https://neto-api.herokuapp.com/pic/${urlSplit[1]}`)
-    .then(onLoad)
-    .catch(err => {
-      console.log(err);
-    });
-  }
-}
-
 function onLoad(response) {
   imageLoader.setAttribute('style', 'display: none');
   response.text().then(text => {
-
     if(!response.ok) {
       error.setAttribute('style', 'display: inline-block');
       errorMessage.innerHTML = text;
@@ -226,13 +215,8 @@ function onLoad(response) {
     }
     const data = JSON.parse(text);
     sessionStorage.id = data.id;
-
-    if(window.location.href === `${urlSplit[0]}?id=${data.id}`) {
-      img.src = data.url;
-    } else {
-      sessionStorage.flag = 'true'; // с булевым значением не работает
-      window.location.href = `${urlSplit[0]}?id=${data.id}`
-    }
+    sessionStorage.flag = 'true'; // с булевым значением не работает
+    window.location.href = `${urlSplit[0]}?id=${data.id}`
   });
 }
 
@@ -247,7 +231,6 @@ function startWebSocket() {
   connection.addEventListener('message', event => {
     const data = JSON.parse(event.data);
     console.log(data);
-    // console.log('mask: ' + data.pic.mask);
     insertData(data);
   });
 
@@ -255,59 +238,63 @@ function startWebSocket() {
 
 function insertData(data) {
   if(data.event === 'pic') {
+    img.src = data.pic.url;
+    sessionStorage.id = data.pic.id;
+    addMask(data.pic.mask);
     for (const key in data.pic.comments){
       insertComment(data.pic.comments[key]);
     }
   } else if(data.event === 'comment') {
       insertComment(data.comment);
+  } else if(data.event === 'mask') {
+    mask.src = data.url;
   }
 }
 
 // режим комментирования
 
-
 const commentsForm = {
   tag: 'form',
   cls: 'comments__form',
+  content: [{
+    tag: 'span',
+    cls: 'comments__marker',
+  },
+  {
+    tag: 'input',
+    cls: 'comments__marker-checkbox',
+    attrs: { type: 'checkbox' }
+  },
+  {
+    tag: 'div',
+    cls: 'comments__body',
     content: [{
-      tag: 'span',
-      cls: 'comments__marker',
+      tag: 'div',
+      cls: 'comment',
+      content: {
+        tag: 'div',
+        cls: 'loader',
+        attrs: { hidden: true },
+        content: [{tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}]
+      }
+    },
+    {
+      tag: 'textarea',
+      cls: 'comments__input',
+      attrs: { typy: 'text', placeholder: 'Напишите ответ...' }
     },
     {
       tag: 'input',
-      cls: 'comments__marker-checkbox',
-      attrs: { type: 'checkbox' }
+      cls: 'comments__close',
+      attrs: { type: 'button', value: 'Закрыть' }
     },
     {
-      tag: 'div',
-      cls: 'comments__body',
-      content: [{
-        tag: 'div',
-        cls: 'comment',
-        content: {
-          tag: 'div',
-          cls: 'loader',
-          attrs: { hidden: true },
-          content: [{tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}, {tag: 'span'}]
-        }
-      },
-      {
-        tag: 'textarea',
-        cls: 'comments__input',
-        attrs: { typy: 'text', placeholder: 'Напишите ответ...' }
-      },
-      {
-        tag: 'input',
-        cls: 'comments__close',
-        attrs: { type: 'button', value: 'Закрыть' }
-      },
-      {
-        tag: 'input',
-        cls: 'comments__submit',
-        attrs: { type: 'submit', value: 'Отправить' }
-      }
-      ]
-    }]
+      tag: 'input',
+      cls: 'comments__submit',
+      attrs: { type: 'submit', value: 'Отправить' }
+    }
+    ]
+  }]
 }
 
 class Comment {
@@ -332,7 +319,7 @@ class Comment {
 
 Array.from(menuToggle).forEach(el => el.addEventListener('click', toggleComments));
 app.addEventListener('click',() =>{
-  if(!event.target.classList.contains('current-image') && !event.target.classList.contains('app')) {
+  if(event.target.tagName !== 'CANVAS') {
     return;
   }
   if(menuComments.getAttribute('data-state') !== 'selected') {
@@ -357,7 +344,7 @@ function toggleComments() {
 
 function createCommentsForm(data = '') {
 
-  // если включен режим скрыть комментарии
+  // если при создании новой формы включен режим скрыть комментарии
   if(menuToggle[1].checked && !data) {
     return;
   }
@@ -375,7 +362,6 @@ function createCommentsForm(data = '') {
   // обраточки формы комментариев
 
   app.appendChild(newConmmentsForm);
-  console.log(markerCheck.getBoundingClientRect());
   const x = data ? data.left : event.pageX - markerCheck.getBoundingClientRect().width/2,
         y = data ? data.top : event.pageY;
 
@@ -384,8 +370,7 @@ function createCommentsForm(data = '') {
   input.addEventListener('input', showLoader);
   markerCheck.addEventListener('click', openForm);
 
-  newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px`)
-
+  newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px; z-index: 15`);
 
   markerCheck.checked = true;
 
@@ -401,9 +386,6 @@ function createCommentsForm(data = '') {
         'Content-type': 'application/x-www-form-urlencoded'
       },
       body: message
-    })
-    .then((responce) => {
-      // console.log(responce);
     })
     .catch(err => {
       imageLoader.setAttribute('style', 'display: none');
@@ -439,13 +421,13 @@ function insertComment(comment) {
   const date = new Date(comment.timestamp).toLocaleString('ru-Ru'),
         sendComment = createElement(new Comment(date, comment.message)),
         elemXY = document.elementFromPoint(comment.left, comment.top),
-        elem = app.querySelector(`[style="top: ${comment.top}px; left: ${comment.left}px"]`),
+        elem = app.querySelector(`[style="top: ${comment.top}px; left: ${comment.left}px; z-index: 15"]`), // узкое место
         form = elem ? elem : createCommentsForm(comment),
         commentsBody = form.querySelector('.comments__body'),
-        loader = form.querySelector('.loader');
-console.log(elem);
-console.log('x:' + comment.left +' y:' + comment.top);
+        loader = form.querySelector('.loader'),
+        marker = form.querySelector('.comments__marker-checkbox');
   commentsBody.insertBefore(sendComment, loader.parentElement);
+  form.hidden = menuToggle[1].checked ? true : false;
 }
 
 
@@ -491,4 +473,156 @@ function closeAllForms() {
   Array.from(forms).forEach((el) => {
     el.querySelector('.comments__marker-checkbox').checked = false;
   });
+}
+
+
+// режим рисования
+
+const menuDraw = menu.querySelector('.draw'),
+      drawTools = menu.querySelector('.draw-tools'),
+      colors = drawTools.querySelectorAll('.menu__color');
+
+const brushRadius = 4;
+let curves = [];
+let drawing = false;
+let needsRepaint = false;
+let ZIndex = 0;
+
+function getHue() {
+  let color;
+  Array.from(colors).forEach(el => {
+    if(el.checked) {
+      switch(el.value) {
+        case 'red':
+          color = '#ea5d56';
+          break;
+        case 'yellow':
+          color = '#f3d135';
+          break;
+        case 'green':
+          color = '#6cbe47';
+          break;
+        case 'blue':
+          color = '#53a7f5';
+          break;
+        case 'purple':
+          color = '#b36ade';
+          break;
+      }
+    }
+  })
+  return color;
+}
+
+function addCanvas() {
+  app.appendChild(canvas);
+  canvas.setAttribute('style', `position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: block; z-index: 10`);
+  canvas.width = img.width;
+  canvas.height = img.height;
+}
+
+function addMask(url) {
+  mask.src = url ? url : '';
+  mask.setAttribute('style', `position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: block; z-index: 9`);
+  mask.draggable = false;
+  app.appendChild(mask);
+}
+
+// Сглаживание точки
+function circle(point) {
+  ctx.fillStyle = getHue();
+  ctx.beginPath();
+  ctx.arc(...point, brushRadius / 2, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+function smoothCurveBetween (p1, p2) {
+  const cp = p1.map((coord, idx) => (coord + p2[idx]) / 2);
+  ctx.quadraticCurveTo(...p1, ...cp);
+}
+
+function smoothCurve(points) {
+  ctx.beginPath();
+  ctx.lineWidth = brushRadius;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  ctx.moveTo(...points[0]);
+
+  for(let i = 1; i < points.length - 1; i++) {
+    smoothCurveBetween(points[i], points[i + 1]);
+  }
+  ctx.strokeStyle = getHue();
+  ctx.stroke();
+  ctx.closePath();
+}
+
+// Назначение обработчиков
+
+canvas.addEventListener("mousedown", (evt) => {
+  if(menuDraw.getAttribute('data-state') !== 'selected') {
+    return;
+  }
+  drawing = true;
+  const curve = []; // новая кривая
+  curve.push([evt.offsetX, evt.offsetY]); // добавляем новую точку
+  curves.push(curve); // добавляем кривую в массив
+  needsRepaint = true;
+  sendMask();
+});
+
+canvas.addEventListener("mouseup", (evt) => {
+  if(menuDraw.getAttribute('data-state') !== 'selected') {
+    return;
+  }
+  drawing = false;
+  curves = [];
+  canvas.toBlob(blob => connection.send(blob)); // веб сокет
+  // ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+canvas.addEventListener("mouseleave", (evt) => {
+  drawing = false;
+});
+
+canvas.addEventListener("mousemove", (evt) => {
+  if(menuDraw.getAttribute('data-state') !== 'selected') {
+    return;
+  }
+  if (drawing) {
+    const point = [evt.offsetX, evt.offsetY];
+    curves[curves.length - 1].push(point);
+    needsRepaint = true;
+  }
+});
+
+function repaint () {
+  curves
+    .forEach((curve) => {
+      circle(curve[0]); // первая точка
+      smoothCurve(curve);
+    });
+}
+
+function tick () {
+  if(needsRepaint) {
+    repaint();
+    needsRepaint = false;
+  }
+
+  window.requestAnimationFrame(tick);
+}
+
+tick();
+
+function sendMask() {
+  if(!drawing) {
+    return;
+  }
+  setTimeout(() => {
+    canvas.toBlob(blob => connection.send(blob));
+    console.log('test');
+    sendMask();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }, 1000);
 }
