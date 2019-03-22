@@ -483,7 +483,7 @@ const menuDraw = menu.querySelector('.draw'),
       colors = drawTools.querySelectorAll('.menu__color');
 
 const brushRadius = 4;
-let curves = [];
+let curve = [];
 let drawing = false;
 let needsRepaint = false;
 let ZIndex = 0;
@@ -564,9 +564,7 @@ canvas.addEventListener("mousedown", (evt) => {
     return;
   }
   drawing = true;
-  const curve = []; // новая кривая
   curve.push([evt.offsetX, evt.offsetY]); // добавляем новую точку
-  curves.push(curve); // добавляем кривую в массив
   needsRepaint = true;
   sendMask();
 });
@@ -576,7 +574,7 @@ canvas.addEventListener("mouseup", (evt) => {
     return;
   }
   drawing = false;
-  curves = [];
+  curve = [];
   canvas.toBlob(blob => connection.send(blob)); // веб сокет
   // ctx.clearRect(0, 0, canvas.width, canvas.height);
 });
@@ -591,25 +589,16 @@ canvas.addEventListener("mousemove", (evt) => {
   }
   if (drawing) {
     const point = [evt.offsetX, evt.offsetY];
-    curves[curves.length - 1].push(point);
+    curve.push(point);
     needsRepaint = true;
   }
 });
 
-function repaint () {
-  curves
-    .forEach((curve) => {
-      circle(curve[0]); // первая точка
-      smoothCurve(curve);
-    });
-}
-
 function tick () {
   if(needsRepaint) {
-    repaint();
+    smoothCurve(curve);
     needsRepaint = false;
   }
-
   window.requestAnimationFrame(tick);
 }
 
@@ -619,10 +608,9 @@ function sendMask() {
   if(!drawing) {
     return;
   }
-  setTimeout(() => {
-    canvas.toBlob(blob => connection.send(blob));
-    console.log('test');
-    sendMask();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }, 1000);
+    // ctx.drawImage(mask, 0, 0, canvas.width, canvas.height);
+  console.log(ctx);
+  canvas.toBlob(blob => connection.send(blob));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  setTimeout(sendMask, 1000);
 }
