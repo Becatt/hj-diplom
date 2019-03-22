@@ -4,25 +4,16 @@ let connection;
 const currentUrl = window.location.href,
       urlSplit = currentUrl.split(/\?id=/),
       app = document.querySelector('.app'),
-      menu = app.querySelector('.menu'),
-      uploadButton = menu.querySelector('.new'),
       error = app.querySelector('.error'),
       errorMessage = error.querySelector('.error__message'),
-      img = app.querySelector('img'),
-      imageLoader = app.querySelector('.image-loader'),
-      share = menu.querySelector('.share'),
-      menuUrl = menu.querySelector('.menu__url'),
-      btnCopy = menu.querySelector('.menu_copy'),
-      menuComments = menu.querySelector('.comments'),
-      burger = menu.querySelector('.burger');
-
-const menuToggle = menu.querySelectorAll('.menu__toggle');
-const dragMenu = menu.querySelector('.drag');
-const canvas = document.createElement('canvas');
-const mask = document.createElement('img');
-const ctx = canvas.getContext('2d');
+      img = app.querySelector('img');
 
 // меню
+const menu = app.querySelector('.menu'),
+      menuToggle = menu.querySelectorAll('.menu__toggle'),
+      dragMenu = menu.querySelector('.drag'),
+      burger = menu.querySelector('.burger');
+
 
 function setMenuState(setMenuState = 'selected') {
   menu.setAttribute('data-state', setMenuState);
@@ -117,22 +108,13 @@ function throttle(callback) {
   };
 }
 
-// инициализация
-
-function initial() {
-  img.src = '';
-  img.draggable = false;
-  setMenuState('initial');
-  app.removeChild(app.querySelector('.comments__form'));
-  menuUrl.value = currentUrl;
-  startWebSocket();
-  setMode();
-  setTimeout(addCanvas, 2000); // Очень ненадежнно, надо бы на промис переделать
-}
-
-initial();
-
 // режим публикации
+const uploadButton = menu.querySelector('.new'),
+      share = menu.querySelector('.share'),
+      menuUrl = menu.querySelector('.menu__url'),
+      btnCopy = menu.querySelector('.menu_copy'),
+      imageLoader = app.querySelector('.image-loader');
+
 // назнаение обработчиков
 
 uploadButton.addEventListener('click', upload);
@@ -145,7 +127,7 @@ btnCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.va
 function upload() {
 
   event.preventDefault();
-  const imgSrcRegExp = /^file/;
+  const imgSrcRegExp = /\.jpeg$|\.png$/;
 
   if(event.type !== 'drop') {
     createInput();
@@ -154,7 +136,7 @@ function upload() {
 
   console.log(img.src);
 
-  if(imgSrcRegExp.test(img.src)) {
+  if(!imgSrcRegExp.test(img.src)) {
     const file = event.dataTransfer.files[0];
     loadImg(file);
     return;
@@ -174,8 +156,8 @@ function createInput() {
 
 // проверяем файл, загружаем картинку и отправляем на сервер
 function loadImg(myFile = '') {
-  const file = myFile ? myFile : event.target.files[0],
-        fileTypeRegExp = /image\/jpeg|image\/png/;
+const file = myFile ? myFile : event.target.files[0],
+      fileTypeRegExp = /image\/jpeg|image\/png/;
 
   if (!fileTypeRegExp.test(file.type)) {
     error.setAttribute('style', 'display: inline-block');
@@ -254,6 +236,8 @@ function insertData(data) {
 }
 
 // режим комментирования
+
+const menuComments = menu.querySelector('.comments');
 
 const commentsForm = {
   tag: 'form',
@@ -481,13 +465,15 @@ function closeAllForms() {
 
 const menuDraw = menu.querySelector('.draw'),
       drawTools = menu.querySelector('.draw-tools'),
-      colors = drawTools.querySelectorAll('.menu__color');
+      canvas = document.createElement('canvas'),
+      mask = document.createElement('img'),
+      ctx = canvas.getContext('2d'),
+      colors = drawTools.querySelectorAll('.menu__color'),
+      brushRadius = 4;
 
-const brushRadius = 4;
-let curve = [];
-let drawing = false;
-let needsRepaint = false;
-let ZIndex = 0;
+let curve = [],
+    drawing = false,
+    needsRepaint = false;
 
 function getHue() {
   let color;
@@ -615,3 +601,19 @@ function sendMask() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   setTimeout(sendMask, 1000);
 }
+
+
+// инициализация
+
+function initial() {
+  img.src = '';
+  img.draggable = false;
+  setMenuState('initial');
+  app.removeChild(app.querySelector('.comments__form'));
+  menuUrl.value = currentUrl;
+  startWebSocket();
+  setMode();
+  setTimeout(addCanvas, 2000); // Очень ненадежнно, надо бы на промис переделать
+}
+
+initial();
