@@ -152,6 +152,8 @@ function upload() {
     return;
   }
 
+  console.log(img.src);
+
   if(imgSrcRegExp.test(img.src)) {
     const file = event.dataTransfer.files[0];
     loadImg(file);
@@ -362,8 +364,8 @@ function createCommentsForm(data = '') {
   // обраточки формы комментариев
 
   app.appendChild(newConmmentsForm);
-  const x = data ? data.left : event.pageX - markerCheck.getBoundingClientRect().width/2,
-        y = data ? data.top : event.pageY;
+  const x = data ? data.left : event.pageX - markerCheck.getBoundingClientRect().width/2 + pageXOffset,
+        y = data ? data.top : event.pageY + pageYOffset;
 
   submitBtn.addEventListener('click', sendComment);
   closeBtn.addEventListener('click', () => markerCheck.checked = false);
@@ -373,7 +375,6 @@ function createCommentsForm(data = '') {
   newConmmentsForm.setAttribute('style', `top: ${y}px; left: ${x}px; z-index: 15`);
 
   markerCheck.checked = true;
-
 
   // функции обраточиков
   function sendComment() {
@@ -576,7 +577,6 @@ canvas.addEventListener("mouseup", (evt) => {
   drawing = false;
   curve = [];
   canvas.toBlob(blob => connection.send(blob)); // веб сокет
-  // ctx.clearRect(0, 0, canvas.width, canvas.height);
 });
 
 canvas.addEventListener("mouseleave", (evt) => {
@@ -596,6 +596,7 @@ canvas.addEventListener("mousemove", (evt) => {
 
 function tick () {
   if(needsRepaint) {
+    circle(curve[0]);
     smoothCurve(curve);
     needsRepaint = false;
   }
