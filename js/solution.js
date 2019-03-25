@@ -10,46 +10,14 @@ const currentUrl = window.location.href,
 
 // меню
 const menu = app.querySelector('.menu'),
-      menuToggle = menu.querySelectorAll('.menu__toggle'),
       dragMenu = menu.querySelector('.drag'),
-      burger = menu.querySelector('.burger');
-
-
-function setMenuState(setMenuState = 'selected') {
-  menu.setAttribute('data-state', setMenuState);
-  Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
-}
-
-// выбор пункта меню
-function selectMode() {
-  setMenuState();
-  event.currentTarget.setAttribute('data-state', 'selected');
-}
-
-burger.addEventListener('click', () => setMenuState('default'));
-
-Array.from(menu.children).forEach(el => {
-  if(el.classList.contains('mode')) {
-    el.addEventListener('click', selectMode);
-  }
-});
-
-// Установка режима меню при загрузке старницы
-
-function setMode() {
-  if(sessionStorage.flag === 'true') {
-    menu.setAttribute('data-state', 'selected');
-    share.setAttribute('data-state', 'selected');
-    sessionStorage.flag = 'false';
-  // если нажали обновить
-  } else if(urlSplit[1] && urlSplit[1] === sessionStorage.id) {
-      setMenuState('default');
-  // если перешли по ссылке
-  } else if(urlSplit[1]){
-      menu.setAttribute('data-state', 'selected');
-      menuComments.setAttribute('data-state', 'selected');
-  }
-}
+      burger = menu.querySelector('.burger'),
+      uploadButton = menu.querySelector('.new'),
+      menuComments = menu.querySelector('.comments'),
+      menuToggle = menu.querySelectorAll('.menu__toggle'),
+      menuDraw = menu.querySelector('.draw'),
+      drawTools = menu.querySelector('.draw-tools'),
+      share = menu.querySelector('.share');
 
 // плавающее меню
 let isMoved = false;
@@ -57,15 +25,29 @@ let minY, minX, maxX, maxY;
 let shiftX = 0;
 let shiftY = 0;
 
+function getMenuWidth() {
+  const menuBorderWidth = menu.offsetWidth - menu.clientWidth;
+  let width = dragMenu.offsetWidth + menu.clientLeft * 2;
+  if(menu.getAttribute('data-state') === 'default') {
+    width += uploadButton.offsetWidth + menuComments.offsetWidth + menuDraw.offsetWidth + share.offsetWidth;
+  } else if (menu.getAttribute('data-state') === 'selected') {
+    const selected = menu.querySelector('[data-state="selected"]'),
+          selectedToolsWidth = selected.nextElementSibling.classList.contains('tool') ? selected.nextElementSibling.offsetWidth : 0;
+    width += burger.offsetWidth + selected.offsetWidth + selectedToolsWidth;
+  } else {
+    width += uploadButton.offsetWidth;
+  }
+  return width;
+}
+
 const dragStart = event => {
   isMoved = true;
-    minY = app.offsetTop;
-    minX = app.offsetLeft;
-    maxX = app.offsetLeft + app.offsetWidth - menu.offsetWidth;
-    maxY = app.offsetTop + app.offsetHeight - menu.offsetHeight;
-    shiftX = event.pageX - event.target.getBoundingClientRect().left - window.pageXOffset;
-    shiftY = event.pageY - event.target.getBoundingClientRect().top - window.pageYOffset;
-
+  minY = app.offsetTop;
+  minX = app.offsetLeft;
+  maxX = app.offsetLeft + app.offsetWidth - menu.offsetWidth;
+  maxY = app.offsetTop + app.offsetHeight - menu.offsetHeight;
+  shiftX = event.pageX - event.target.getBoundingClientRect().left - window.pageXOffset;
+  shiftY = event.pageY - event.target.getBoundingClientRect().top - window.pageYOffset;
 };
 
 const drag = throttle((x, y) => {
@@ -76,13 +58,13 @@ const drag = throttle((x, y) => {
     y = Math.min(y, maxY);
     x = Math.max(x, minX);
     y = Math.max(y, minY);
-    menu.style.left = x + 'px';
-    menu.style.top = y + 'px';
+    menu.style.left = x - 1 + 'px';
+    menu.style.top = y - 1 + 'px';
   }
 });
+
 const drop = event => {
   if (isMoved) {
-    const check = document.elementFromPoint(event.clientX, event.clientY);
     isMoved = false;
   }
 };
@@ -96,22 +78,70 @@ document.addEventListener('touchmove', event => drag(event.touches[0].pageX, eve
 document.addEventListener('touchend', event => drop(event.changedTouches[0]));
 
 function throttle(callback) {
-  let isWaiting = false;
   return function () {
-    if (!isWaiting) {
       callback.apply(this, arguments);
-      isWaiting = true;
-      requestAnimationFrame(() => {
-        isWaiting = false;
-      });
-    }
   };
 }
 
+// Установка режима меню
+function setMenuState(setMenuState = 'selected') {
+  menu.setAttribute('data-state', setMenuState);
+  Array.from(menu.children).forEach(el => el.removeAttribute('data-state'));
+}
+
+// выбор пункта меню
+function selectMode() {
+  setMenuState();
+  event.currentTarget.setAttribute('data-state', 'selected');
+  changePos(menu.getBoundingClientRect().x, menu.getBoundingClientRect().y);
+}
+
+// чтобы меню не разваливалось при измении размеров
+function changePos(x, y) {
+  maxX = app.offsetLeft + app.offsetWidth - getMenuWidth();
+  maxY = app.offsetTop + app.offsetHeight - menu.offsetHeight;
+  x = Math.min(x, maxX);
+  y = Math.min(y, maxX);
+  menu.style.left = Math.floor(x) + 'px';
+  menu.style.top = Math.floor(y) + 'px';
+  console.log(menu.offsetWidth);
+  console.log(getMenuWidth());
+}
+
+burger.addEventListener('click', () => {
+  setMenuState('default');
+  changePos(menu.getBoundingClientRect().x, menu.getBoundingClientRect().y);
+});
+
+Array.from(menu.children).forEach(el => {
+  if(el.classList.contains('mode')) {
+    el.addEventListener('click', selectMode);
+  }
+});
+
+// Установка режима меню при загрузке старницы
+
+function setMode() {
+  if(!urlSplit[1]) {
+    setMenuState('initial');
+    burger.style.display = 'none';
+  }
+  else if(sessionStorage.flag === 'true') {
+    menu.setAttribute('data-state', 'selected');
+    share.setAttribute('data-state', 'selected');
+    sessionStorage.flag = 'false';
+  // если нажали обновить
+  } else if(urlSplit[1] === sessionStorage.id) {
+    setMenuState('default');
+  // если перешли по ссылке
+  } else {
+    menu.setAttribute('data-state', 'selected');
+    menuComments.setAttribute('data-state', 'selected');
+  }
+}
+
 // режим публикации
-const uploadButton = menu.querySelector('.new'),
-      share = menu.querySelector('.share'),
-      menuUrl = menu.querySelector('.menu__url'),
+const menuUrl = menu.querySelector('.menu__url'),
       btnCopy = menu.querySelector('.menu_copy'),
       imageLoader = app.querySelector('.image-loader');
 
@@ -125,7 +155,6 @@ btnCopy.addEventListener('click', () => navigator.clipboard.writeText(menuUrl.va
 // функции
 
 function upload() {
-
   event.preventDefault();
   const imgSrcRegExp = /\.jpeg$|\.png$/;
 
@@ -135,8 +164,8 @@ function upload() {
   }
 
   console.log(img.src);
-
-  if(!imgSrcRegExp.test(img.src)) {
+// проверить в демо режиме
+  if(img.src === urlSplit[0]) { // imgSrcRegExp.test(img.src) старое условие
     const file = event.dataTransfer.files[0];
     loadImg(file);
     return;
@@ -214,7 +243,7 @@ function startWebSocket() {
 
   connection.addEventListener('message', event => {
     const data = JSON.parse(event.data);
-    console.log(data);
+    // console.log(data);
     insertData(data);
   });
 
@@ -229,15 +258,15 @@ function insertData(data) {
       insertComment(data.pic.comments[key]);
     }
   } else if(data.event === 'comment') {
-      insertComment(data.comment);
+    insertComment(data.comment);
   } else if(data.event === 'mask') {
     mask.src = data.url;
+  } else if(data.event === 'error') {
+    console.error(data.message);
   }
 }
 
 // режим комментирования
-
-const menuComments = menu.querySelector('.comments');
 
 const commentsForm = {
   tag: 'form',
@@ -457,15 +486,19 @@ function closeAllForms() {
   const forms = app.querySelectorAll('.comments__form');
   Array.from(forms).forEach((el) => {
     el.querySelector('.comments__marker-checkbox').checked = false;
+    removeEmptyForm(el);
   });
 }
 
+function removeEmptyForm(form) {
+  if(!form.querySelector('.comment__message')) {
+    app.removeChild(form);
+  }
+}
 
 // режим рисования
 
-const menuDraw = menu.querySelector('.draw'),
-      drawTools = menu.querySelector('.draw-tools'),
-      canvas = document.createElement('canvas'),
+const canvas = document.createElement('canvas'),
       mask = document.createElement('img'),
       ctx = canvas.getContext('2d'),
       colors = drawTools.querySelectorAll('.menu__color'),
@@ -562,7 +595,7 @@ canvas.addEventListener("mouseup", (evt) => {
   }
   drawing = false;
   curve = [];
-  canvas.toBlob(blob => connection.send(blob)); // веб сокет
+  // canvas.toBlob(blob => connection.send(blob)); // веб сокет
 });
 
 canvas.addEventListener("mouseleave", (evt) => {
@@ -592,14 +625,17 @@ function tick () {
 tick();
 
 function sendMask() {
-  if(!drawing) {
-    return;
-  }
+  // if(!drawing) {
+  //   return;
+  // }
     // ctx.drawImage(mask, 0, 0, canvas.width, canvas.height);
-  console.log(ctx);
   canvas.toBlob(blob => connection.send(blob));
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  setTimeout(sendMask, 1000);
+  if(drawing) {
+    setTimeout(() => {
+      sendMask();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }, 1000);
+  }
 }
 
 
@@ -608,7 +644,6 @@ function sendMask() {
 function initial() {
   img.src = '';
   img.draggable = false;
-  setMenuState('initial');
   app.removeChild(app.querySelector('.comments__form'));
   menuUrl.value = currentUrl;
   startWebSocket();
