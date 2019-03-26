@@ -1,5 +1,6 @@
 'use strict';
 let connection;
+let maskFlag = false;
 
 const currentUrl = window.location.href,
       urlSplit = currentUrl.split(/\?id=/),
@@ -17,7 +18,10 @@ const menu = app.querySelector('.menu'),
       menuToggle = menu.querySelectorAll('.menu__toggle'),
       menuDraw = menu.querySelector('.draw'),
       drawTools = menu.querySelector('.draw-tools'),
-      share = menu.querySelector('.share');
+      colors = drawTools.querySelectorAll('.menu__color'),
+      share = menu.querySelector('.share'),
+      menuUrl = menu.querySelector('.menu__url'),
+      btnCopy = menu.querySelector('.menu_copy');
 
 // плавающее меню
 let isMoved = false;
@@ -104,8 +108,8 @@ function changePos(x, y) {
   y = Math.min(y, maxX);
   menu.style.left = Math.floor(x) + 'px';
   menu.style.top = Math.floor(y) + 'px';
-  console.log(menu.offsetWidth);
-  console.log(getMenuWidth());
+  // console.log(menu.offsetWidth);
+  // console.log(getMenuWidth());
 }
 
 burger.addEventListener('click', () => {
@@ -141,9 +145,7 @@ function setMode() {
 }
 
 // режим публикации
-const menuUrl = menu.querySelector('.menu__url'),
-      btnCopy = menu.querySelector('.menu_copy'),
-      imageLoader = app.querySelector('.image-loader');
+const imageLoader = app.querySelector('.image-loader');
 
 // назнаение обработчиков
 
@@ -243,7 +245,7 @@ function startWebSocket() {
 
   connection.addEventListener('message', event => {
     const data = JSON.parse(event.data);
-    // console.log(data);
+    console.log(data);
     insertData(data);
   });
 
@@ -254,6 +256,7 @@ function insertData(data) {
     img.src = data.pic.url;
     sessionStorage.id = data.pic.id;
     addMask(data.pic.mask);
+    maskFlag = data.pic.mask ? true : false;
     for (const key in data.pic.comments){
       insertComment(data.pic.comments[key]);
     }
@@ -501,7 +504,6 @@ function removeEmptyForm(form) {
 const canvas = document.createElement('canvas'),
       mask = document.createElement('img'),
       ctx = canvas.getContext('2d'),
-      colors = drawTools.querySelectorAll('.menu__color'),
       brushRadius = 4;
 
 let curve = [],
@@ -548,7 +550,7 @@ function addMask(url) {
   app.appendChild(mask);
 }
 
-// Сглаживание точки
+// сглаживание точки
 function circle(point) {
   ctx.fillStyle = getHue();
   ctx.beginPath();
@@ -556,6 +558,7 @@ function circle(point) {
   ctx.fill();
 }
 
+// сглаживание между точками
 function smoothCurveBetween (p1, p2) {
   const cp = p1.map((coord, idx) => (coord + p2[idx]) / 2);
   ctx.quadraticCurveTo(...p1, ...cp);
@@ -564,8 +567,8 @@ function smoothCurveBetween (p1, p2) {
 function smoothCurve(points) {
   ctx.beginPath();
   ctx.lineWidth = brushRadius;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round'; // сглаживание углов схождения линий
+  ctx.lineCap = 'round'; // окончание линий
 
   ctx.moveTo(...points[0]);
 
@@ -584,7 +587,7 @@ canvas.addEventListener("mousedown", (evt) => {
     return;
   }
   drawing = true;
-  curve.push([evt.offsetX, evt.offsetY]); // добавляем новую точку
+  curve.push([evt.offsetX, evt.offsetY]); // добавляем первую точку
   needsRepaint = true;
   sendMask();
 });
@@ -607,14 +610,14 @@ canvas.addEventListener("mousemove", (evt) => {
     return;
   }
   if (drawing) {
-    const point = [evt.offsetX, evt.offsetY];
+    const point = [evt.offsetX, evt.offsetY]; // добавляем новую точку
     curve.push(point);
     needsRepaint = true;
   }
 });
 
 function tick () {
-  if(needsRepaint) {
+  if(needsRepaint && curve[0]) {
     circle(curve[0]);
     smoothCurve(curve);
     needsRepaint = false;
@@ -625,19 +628,18 @@ function tick () {
 tick();
 
 function sendMask() {
-  // if(!drawing) {
-  //   return;
-  // }
-    // ctx.drawImage(mask, 0, 0, canvas.width, canvas.height);
-  canvas.toBlob(blob => connection.send(blob));
-  if(drawing) {
-    setTimeout(() => {
-      sendMask();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }, 1000);
+  if(!drawing) {
+    return;
   }
+  setTimeout(() => {
+    canvas.toBlob(blob => connection.send(blob));
+    sendMask();
+    // без св-ва mask в событии pic склеивание даных на сервере почему-то не происходит
+    if(maskFlag) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }, 1000);
 }
-
 
 // инициализация
 
